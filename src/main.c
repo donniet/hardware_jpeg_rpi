@@ -83,5 +83,8 @@ int get_file_size(char *fname) {
 
 int main(int ac, char ** av) {
     printf("hello!\n");
+
+    bcm_host_init();
+
     return 0;
 }
