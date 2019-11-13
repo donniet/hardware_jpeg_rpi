@@ -280,15 +280,16 @@ class Encoder
     : public Component
 {
 protected:
-    static const OMX_U32 port_index = 201;
+    static const OMX_U32 input_port_index = 200;
+    static const OMX_U32 output_port_index = 201;
     static const char * component_name;
     OMX_BUFFERHEADERTYPE** encoder_output_buffer;
 public:
     void enable() {
-        enable_port(port_index);
+        enable_port(output_port_index);
         OMX_PARAM_PORTDEFINITIONTYPE port;
         OMX_INIT_STRUCTURE(port);
-        port.nPortIndex = port_index;
+        port.nPortIndex = output_port_index;
 
         OMX_ERRORTYPE e = OMX_GetParameter(handle, OMX_IndexParamPortDefinition, &port);
         if (e != OMX_ErrorNone) {
@@ -296,7 +297,7 @@ public:
             exit(1);
         }
 
-        e = OMX_AllocateBuffer(handle, encoder_output_buffer, port_index, 0, port.nBufferSize);
+        e = OMX_AllocateBuffer(handle, encoder_output_buffer, output_port_index, 0, port.nBufferSize);
         if (e != OMX_ErrorNone) {
             fprintf(stderr, "error: OMX_AllocateBuffer: %s\n", err2str(e));
             exit(1);
@@ -308,9 +309,9 @@ public:
     void disable() {
         OMX_ERRORTYPE e;
 
-        disable_port(port_index);
+        disable_port(output_port_index);
 
-        e = OMX_FreeBuffer(handle, port_index, *encoder_output_buffer);
+        e = OMX_FreeBuffer(handle, output_port_index, *encoder_output_buffer);
         if (e != OMX_ErrorNone) {
             fprintf(stderr, "error: OMX_FreeBuffer: %s\n", err2str(e));
             exit(1);
@@ -339,7 +340,7 @@ protected:
     void set_encoder_settings() {
         OMX_PARAM_PORTDEFINITIONTYPE port_st;
         OMX_INIT_STRUCTURE(port_st);
-        port_st.nPortIndex = port_index;
+        port_st.nPortIndex = output_port_index;
         get_parameter(OMX_IndexParamPortDefinition, &port_st);
         port_st.format.video.nFrameWidth = width;
         port_st.format.video.nFrameHeight = height;
@@ -354,12 +355,12 @@ protected:
             OMX_INIT_STRUCTURE(bitrate_st);
             bitrate_st.eControlRate = OMX_Video_ControlRateVariable;
             bitrate_st.nTargetBitrate = bitrate;
-            bitrate_st.nPortIndex = port_index;
+            bitrate_st.nPortIndex = output_port_index;
             set_parameter(OMX_IndexParamVideoBitrate, &bitrate_st);
         } else {
             OMX_VIDEO_PARAM_QUANTIZATIONTYPE quantization_st;
             OMX_INIT_STRUCTURE(quantization_st);
-            quantization_st.nPortIndex = port_index;
+            quantization_st.nPortIndex = output_port_index;
             // returns error
             // quantization_st.nQpB = qp_b;
             quantization_st.nQpI = qp_i;
@@ -369,45 +370,45 @@ protected:
 
         OMX_VIDEO_PARAM_PORTFORMATTYPE format_st;
         OMX_INIT_STRUCTURE(format_st);
-        format_st.nPortIndex = port_index;
+        format_st.nPortIndex = output_port_index;
         format_st.eCompressionFormat = compression_format;
         set_parameter(OMX_IndexParamVideoPortFormat, &format_st);
 
         OMX_VIDEO_CONFIG_AVCINTRAPERIOD idr_st;
         OMX_INIT_STRUCTURE(idr_st);
-        idr_st.nPortIndex = port_index;
+        idr_st.nPortIndex = output_port_index;
         get_config(OMX_IndexConfigVideoAVCIntraPeriod, &idr_st);
         idr_st.nIDRPeriod = idr_period;
         set_config(OMX_IndexConfigVideoAVCIntraPeriod, &idr_st);
 
         OMX_PARAM_BRCMVIDEOAVCSEIENABLETYPE sei_st;
         OMX_INIT_STRUCTURE(sei_st);
-        sei_st.nPortIndex = port_index;
+        sei_st.nPortIndex = output_port_index;
         sei_st.bEnable = sei;
         set_parameter(OMX_IndexParamBrcmVideoAVCSEIEnable, &sei_st);
 
         OMX_VIDEO_EEDE_ENABLE eede_st;
         OMX_INIT_STRUCTURE(eede_st);
-        eede_st.nPortIndex = port_index;
+        eede_st.nPortIndex = output_port_index;
         eede_st.enable = eede;
         set_parameter(OMX_IndexParamBrcmEEDEEnable, &eede_st);
 
         OMX_VIDEO_EEDE_LOSSRATE eede_loss_rate_st;
         OMX_INIT_STRUCTURE(eede_loss_rate_st);
-        eede_loss_rate_st.nPortIndex = port_index;
+        eede_loss_rate_st.nPortIndex = output_port_index;
         eede_loss_rate_st.loss_rate = eede_loss_rate;
         set_parameter(OMX_IndexParamBrcmEEDELossRate, &eede_loss_rate_st);
 
         OMX_VIDEO_PARAM_AVCTYPE avc_st;
         OMX_INIT_STRUCTURE(avc_st);
-        avc_st.nPortIndex = port_index;
+        avc_st.nPortIndex = output_port_index;
         get_parameter(OMX_IndexParamVideoAvc, &avc_st);
         avc_st.eProfile = profile;
         set_parameter(OMX_IndexParamVideoAvc, &avc_st);
 
         OMX_CONFIG_PORTBOOLEANTYPE headers_st;
         OMX_INIT_STRUCTURE(headers_st);
-        headers_st.nPortIndex = port_index;
+        headers_st.nPortIndex = output_port_index;
         headers_st.bEnabled = inline_headers;
         set_parameter(OMX_IndexParamBrcmVideoAVCInlineHeaderEnable, &headers_st);
     }
@@ -429,6 +430,10 @@ struct Region {
 
 class Camera : public Component {
 protected: 
+    static const OMX_U32 preview_port_index = 70;
+    static const OMX_U32 still_port_index = 72;
+    static const OMX_U32 video_port_index = 71;
+
     static const char * component_name;
     OMX_S32 sharpness;
     OMX_S32 contrast;
@@ -528,9 +533,6 @@ public:
     
 protected:
 
-    static const OMX_U32 port_index = 71;
-
-
     void load_camera_drivers() {
         OMX_ERRORTYPE e;
 
@@ -561,7 +563,9 @@ protected:
     void set_camera_settings() {
         OMX_PARAM_PORTDEFINITIONTYPE port_st;
         OMX_INIT_STRUCTURE(port_st);
-        port_st.nPortIndex = port_index;
+            static const OMX_U32 preview_port_index = 70;
+            static const OMX_U32 still_port_index = 72;
+        port_st.nPortIndex = video_port_index;
         get_parameter(OMX_IndexParamPortDefinition, &port_st);
         port_st.format.video.nFrameWidth = width;
         port_st.format.video.nFrameHeight = height;
@@ -573,7 +577,9 @@ protected:
 
         OMX_CONFIG_FRAMERATETYPE framerate_st;
         OMX_INIT_STRUCTURE(framerate_st);
-        framerate_st.nPortIndex = port_index;
+            static const OMX_U32 preview_port_index = 70;
+            static const OMX_U32 still_port_index = 72;
+        framerate_st.nPortIndex = video_port_index;
         framerate_st.xEncodeFramerate = port_st.format.video.xFramerate;
         set_config(OMX_IndexConfigVideoFramerate, &framerate_st);
         
@@ -647,13 +653,17 @@ protected:
 
         OMX_CONFIG_MIRRORTYPE mirror_type_st;
         OMX_INIT_STRUCTURE(mirror_type_st);
-        mirror_type_st.nPortIndex = port_index;
+            static const OMX_U32 preview_port_index = 70;
+            static const OMX_U32 still_port_index = 72;
+        mirror_type_st.nPortIndex = video_port_index;
         mirror_type_st.eMirror = mirror;
         set_config(OMX_IndexConfigCommonMirror, &mirror_type_st);
 
         OMX_CONFIG_ROTATIONTYPE rotation_st;
         OMX_INIT_STRUCTURE(rotation_st);
-        rotation_st.nPortIndex = port_index;
+            static const OMX_U32 preview_port_index = 70;
+            static const OMX_U32 still_port_index = 72;
+        rotation_st.nPortIndex = video_port_index;
         rotation_st.nRotation = rotation;
         set_config(OMX_IndexConfigCommonRotate, &rotation_st);
 
