@@ -1,0 +1,20 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "../opt_vc/include",
+                "../opt_vc/include/interface/vcos/pthreads",
+                "../opt_vc/include/IL",
+                "../opt_vc/include/interface/vmcs_host/linux",
+                "../opt_vc/src/hello_pi/libs/ilclient"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/clang",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "clang-x64"
+        }
+    ],
+    "version": 4
+}
