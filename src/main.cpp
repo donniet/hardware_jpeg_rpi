@@ -15,6 +15,8 @@
 
 const char *err2str(int err);
 
+class App;
+
 // Dunno where this is originally stolen from...
 #define OMX_INIT_STRUCTURE(a) \
     memset(&(a), 0, sizeof(a)); \
@@ -26,6 +28,7 @@ const char *err2str(int err);
     (a).nVersion.s.nStep = OMX_VERSION_STEP
 
 class Component {
+    friend class App;
 protected:
     OMX_HANDLETYPE handle;
     VCOS_EVENT_FLAGS_T flags;
@@ -276,16 +279,34 @@ public:
 
 const char * Component::name_prefix = "OMX.broadcom.";
 
-class Encoder 
-    : public Component
-{
-protected:
+class NullSink : public Component {
+public:
+    static const OMX_U32 port_index = 240;
+    static const char * port_name;
+
+    NullSink() : Component(port_name) { }
+};
+
+const char * NullSink::port_name = "null_sink";
+
+class Encoder : public Component {
+    friend class App;
+public:
     static const OMX_U32 input_port_index = 200;
     static const OMX_U32 output_port_index = 201;
     static const char * component_name;
-    OMX_BUFFERHEADERTYPE** encoder_output_buffer;
+protected:
+    OMX_BUFFERHEADERTYPE* encoder_output_buffer;
 public:
-    void enable() {
+    void enable_input() {
+        enable_port(input_port_index);
+    }
+
+    void disable_input() {
+        disable_port(output_port_index);
+    }
+
+    void enable_output() {
         enable_port(output_port_index);
         OMX_PARAM_PORTDEFINITIONTYPE port;
         OMX_INIT_STRUCTURE(port);
@@ -297,7 +318,7 @@ public:
             exit(1);
         }
 
-        e = OMX_AllocateBuffer(handle, encoder_output_buffer, output_port_index, 0, port.nBufferSize);
+        e = OMX_AllocateBuffer(handle, &encoder_output_buffer, output_port_index, 0, port.nBufferSize);
         if (e != OMX_ErrorNone) {
             fprintf(stderr, "error: OMX_AllocateBuffer: %s\n", err2str(e));
             exit(1);
@@ -306,12 +327,23 @@ public:
         wait(EVENT_PORT_ENABLE);
     }
 
-    void disable() {
+    OMX_BUFFERHEADERTYPE* fill_buffer() {
+        OMX_ERRORTYPE e = OMX_FillThisBuffer(handle, encoder_output_buffer);
+        if (e != OMX_ErrorNone) {
+            fprintf(stderr, "error: OMX_FillBuffer: %s\n", err2str(e));
+            exit(1);
+        }
+        wait(EVENT_FILL_BUFFER_DONE, 0);
+        return encoder_output_buffer;
+    }
+
+    void disable_output() {
         OMX_ERRORTYPE e;
 
+        disable_port(input_port_index);
         disable_port(output_port_index);
 
-        e = OMX_FreeBuffer(handle, output_port_index, *encoder_output_buffer);
+        e = OMX_FreeBuffer(handle, output_port_index, encoder_output_buffer);
         if (e != OMX_ErrorNone) {
             fprintf(stderr, "error: OMX_FreeBuffer: %s\n", err2str(e));
             exit(1);
@@ -419,7 +451,11 @@ public:
         sei(OMX_FALSE), eede(OMX_FALSE), eede_loss_rate(0),
         profile(OMX_VIDEO_AVCProfileHigh), inline_headers(OMX_FALSE),
         width(1920), height(1080), stride(width), framerate(30)
-    { }
+    { 
+        set_encoder_settings();
+
+        set_idle();
+    }
 };
 
 const char * Encoder::component_name = "video_encode";
@@ -429,11 +465,12 @@ struct Region {
 };
 
 class Camera : public Component {
-protected: 
+    friend class App;
+public:
     static const OMX_U32 preview_port_index = 70;
     static const OMX_U32 still_port_index = 72;
     static const OMX_U32 video_port_index = 71;
-
+protected:
     static const char * component_name;
     OMX_S32 sharpness;
     OMX_S32 contrast;
@@ -480,7 +517,13 @@ public:
         roi{0,0,100,100}, drc_mode(OMX_DynRangeExpOff), width(1920), height(1080),
         framerate(30), stride(width), compression_format(OMX_VIDEO_CodingUnused),
         color_format(OMX_COLOR_FormatYUV420PackedPlanar)
-    { }
+    { 
+        load_camera_drivers();
+
+        set_camera_settings();
+
+        set_idle();
+    }
 
     void set_sharpness(int sharpness) { this->sharpness = sharpness; }
     int get_sharpness() const { return sharpness; }
@@ -560,11 +603,17 @@ protected:
         wait(EVENT_PARAM_OR_CONFIG_CHANGED);
     }
 
+    void enable_capture() {
+        OMX_CONFIG_PORTBOOLEANTYPE capture_st;
+        OMX_INIT_STRUCTURE(capture_st);
+        capture_st.nPortIndex = video_port_index;
+        capture_st.bEnabled = OMX_TRUE;
+        set_config(OMX_IndexConfigPortCapturing, &capture_st);
+    }
+
     void set_camera_settings() {
         OMX_PARAM_PORTDEFINITIONTYPE port_st;
         OMX_INIT_STRUCTURE(port_st);
-            static const OMX_U32 preview_port_index = 70;
-            static const OMX_U32 still_port_index = 72;
         port_st.nPortIndex = video_port_index;
         get_parameter(OMX_IndexParamPortDefinition, &port_st);
         port_st.format.video.nFrameWidth = width;
@@ -577,8 +626,6 @@ protected:
 
         OMX_CONFIG_FRAMERATETYPE framerate_st;
         OMX_INIT_STRUCTURE(framerate_st);
-            static const OMX_U32 preview_port_index = 70;
-            static const OMX_U32 still_port_index = 72;
         framerate_st.nPortIndex = video_port_index;
         framerate_st.xEncodeFramerate = port_st.format.video.xFramerate;
         set_config(OMX_IndexConfigVideoFramerate, &framerate_st);
@@ -653,16 +700,12 @@ protected:
 
         OMX_CONFIG_MIRRORTYPE mirror_type_st;
         OMX_INIT_STRUCTURE(mirror_type_st);
-            static const OMX_U32 preview_port_index = 70;
-            static const OMX_U32 still_port_index = 72;
         mirror_type_st.nPortIndex = video_port_index;
         mirror_type_st.eMirror = mirror;
         set_config(OMX_IndexConfigCommonMirror, &mirror_type_st);
 
         OMX_CONFIG_ROTATIONTYPE rotation_st;
         OMX_INIT_STRUCTURE(rotation_st);
-            static const OMX_U32 preview_port_index = 70;
-            static const OMX_U32 still_port_index = 72;
         rotation_st.nPortIndex = video_port_index;
         rotation_st.nRotation = rotation;
         set_config(OMX_IndexConfigCommonRotate, &rotation_st);
@@ -785,7 +828,16 @@ public:
             exit(1);
         }
 
+        e = OMX_SetupTunnel(cam.handle, cam.video_port_index, enc.handle, enc.input_port_index);
+        if (e != OMX_ErrorNone) {
+            fprintf(stderr, "error: OMX_Init: %s\n", err2str(e));
+            exit(1);
+        }
 
+        
+        cam.enable_port(cam.video_port_index);
+        enc.enable_input();
+        enc.enable_output();
     }
 
     ~App() {
