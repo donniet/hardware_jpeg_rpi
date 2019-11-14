@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <iostream>
 #include <sys/stat.h>
 
 #include <IL/OMX_Core.h>
@@ -192,6 +193,7 @@ public:
     }
 
     Component(std::string const & name) {
+        std::cerr << "constructing component: " << name << std::endl;
         this->name = new char[sizeof(name_prefix) + name.size() + 1];
         sprintf(this->name, "%s%s", name_prefix, name.c_str());
 
@@ -206,9 +208,11 @@ public:
         callbacks.EventHandler = Component::event_handler;
         callbacks.FillBufferDone = Component::fill_buffer_done;
 
+        std::cerr << "getting component handle: " << this->name << std::endl;
+
         e = OMX_GetHandle(&handle, this->name, this, &callbacks);
         if (e != OMX_ErrorNone) {
-            fprintf(stderr, "error: OMX_GetHandle: %s", err2str(e));
+            fprintf(stderr, "error: OMX_GetHandle: %s\n", err2str(e));
             exit(1);
         }
 
@@ -456,6 +460,7 @@ public:
         profile(OMX_VIDEO_AVCProfileHigh), inline_headers(OMX_FALSE),
         width(1920), height(1080), stride(width), framerate(30)
     { 
+        std::cerr << "constructing encoder" << std::endl;
         set_encoder_settings();
 
         set_idle();
@@ -522,6 +527,7 @@ public:
         framerate(30), stride(width), compression_format(OMX_VIDEO_CodingUnused),
         color_format(OMX_COLOR_FormatYUV420PackedPlanar)
     { 
+        std::cerr << "constructing camera" << std::endl;
         load_camera_drivers();
 
         set_camera_settings();
@@ -824,6 +830,7 @@ class App {
     Encoder enc;
 public:
     App() {
+        std::cerr << "constructing App" << std::endl;
         bcm_host_init();
 
         OMX_ERRORTYPE e = OMX_Init();
@@ -854,13 +861,15 @@ public:
     }
 
     ~App() {
-        
+        std::cerr << "destroying App" << std::endl;
         bcm_host_deinit();
     }
 };
 
 int main(int ac, char ** av) {
-    App app();
+    std::cerr << "starting." << std::endl;
+    App app;
+    std::cerr << "app constructed" << std::endl;
 
     return 0;
 }
