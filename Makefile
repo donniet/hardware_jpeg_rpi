@@ -8,7 +8,7 @@ LDFLAGS = -L /opt/vc/lib -Wl,--whole-archive -L/opt/vc/lib/ \
    -lrt -L/opt/vc/src/hello_pi/libs/ilclient -lilclient \
    -Wl,--no-whole-archive -rdynamic \
    -Wl,-rpath-link,/opt/vc/lib
-BLDDIR = /build
+BLDDIR = $(shell pwd)
 INCDIR = $(BLDDIR)/inc
 SRCDIR = $(BLDDIR)/src
 OBJDIR = $(BLDDIR)/bin
