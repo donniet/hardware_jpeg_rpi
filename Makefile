@@ -1,10 +1,14 @@
-CC = /pitools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin/arm-linux-gnueabihf-g++
+ifeq ($(shell uname -m),x86_64)
+   CC = /pitools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin/arm-linux-gnueabihf-g++
+else
+   CC = g++
+endif
 LDFLAGS = -L /opt/vc/lib -Wl,--whole-archive -L/opt/vc/lib/ \
    -lopenmaxil -lbcm_host -lvcos -lvchiq_arm -lpthread \
    -lrt -L/opt/vc/src/hello_pi/libs/ilclient -lilclient \
    -Wl,--no-whole-archive -rdynamic \
    -Wl,-rpath-link,/opt/vc/lib
-BLDDIR = /build
+BLDDIR = $(shell pwd)
 INCDIR = $(BLDDIR)/inc
 SRCDIR = $(BLDDIR)/src
 OBJDIR = $(BLDDIR)/bin
@@ -20,7 +24,7 @@ CFLAGS = -c -Wall -Wno-deprecated --std=c++11 -Wl,-Bstatic -I$(INCDIR) -g -DRASP
    -I/opt/vc/src/hello_pi/libs/ilclient
 SRC = $(wildcard $(SRCDIR)/*.cpp)
 OBJ = $(patsubst $(SRCDIR)/%.cpp, $(OBJDIR)/%.o, $(SRC))
-EXE = $(OBJDIR)/hello
+EXE = $(OBJDIR)/main
 
 all: clean $(EXE) 
     

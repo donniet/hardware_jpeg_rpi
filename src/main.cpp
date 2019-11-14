@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <iostream>
 #include <sys/stat.h>
 
 #include <IL/OMX_Core.h>
@@ -199,10 +200,24 @@ public:
         EVENT_EMPTY_BUFFER_DONE = 0x2000,
     } component_event;
 
-    Component(std::string const & name) {
-        this->name = new char[sizeof(name_prefix) + name.size() + 1];
-        sprintf(this->name, "%s%s", name_prefix, name.c_str());
+    void wait_for_fill_buffer_done() {
+        wait(EVENT_FILL_BUFFER_DONE);
+    }
 
+    Component(std::string const & name) {
+        std::cerr << "constructing component: " << name << std::endl;
+        int len = strlen(name_prefix)+ name.size() + 1;
+        this->name = new char[len];
+        snprintf(this->name, len, "%s%s", name_prefix, name.c_str());
+    }
+    Component(const char * name) {
+        std::cerr << "constructing component: " << name << std::endl;
+        int len = strlen(name_prefix) + strlen(name) + 1;
+        this->name = new char[len];
+        snprintf(this->name, len, "%s%s", name_prefix, name);
+    }
+
+    void initialize() {
         OMX_ERRORTYPE e;
 
         if (vcos_event_flags_create(&flags, "component")) {
@@ -214,11 +229,15 @@ public:
         callbacks.EventHandler = Component::event_handler;
         callbacks.FillBufferDone = Component::fill_buffer_done;
 
+        std::cerr << "getting component handle: " << this->name << std::endl;
+
         e = OMX_GetHandle(&handle, this->name, this, &callbacks);
         if (e != OMX_ErrorNone) {
-            fprintf(stderr, "error: OMX_GetHandle: %s", err2str(e));
+            fprintf(stderr, "error: OMX_GetHandle: %s\n", err2str(e));
             exit(1);
         }
+
+        std::cerr << "got component handle, disabling ports" << std::endl;
 
         static OMX_INDEXTYPE types[] = {
             OMX_IndexParamAudioInit, OMX_IndexParamVideoInit, OMX_IndexParamImageInit, OMX_IndexParamOtherInit
@@ -228,15 +247,21 @@ public:
         OMX_GetParameter(handle, OMX_IndexParamVideoInit, &ports);
 
         for(auto type : types) {
-            if(OMX_GetParameter(handle, type, &ports) == OMX_ErrorNone) {
+            std::cerr << "looking at type: " << type << std::endl;
+
+            if((e = OMX_GetParameter(handle, type, &ports)) == OMX_ErrorNone) {
                 OMX_U32 nPortIndex;
                 for(nPortIndex = ports.nStartPortNumber; nPortIndex < ports.nStartPortNumber+ports.nPorts; nPortIndex++) {
+                    std::cerr << "disablign port: " << nPortIndex << std::endl;
                     e = OMX_SendCommand(handle, OMX_CommandPortDisable, nPortIndex, NULL);
                     if (e != OMX_ErrorNone) {
                         throw std::logic_error("failed to disable port");
                     }
+                    std::cerr << "waiting for port disable event..." << std::endl;
+                    wait(EVENT_PORT_DISABLE);
                 }
-                wait(EVENT_PORT_DISABLE);
+            } else {
+                std::cerr << "error: OMX_GetParameter: " << err2str(e) << std::endl;
             }
         }
     }
@@ -448,7 +473,13 @@ public:
         sei(OMX_FALSE), eede(OMX_FALSE), eede_loss_rate(0),
         profile(OMX_VIDEO_AVCProfileHigh), inline_headers(OMX_FALSE),
         width(1920), height(1080), stride(width), framerate(30)
-    { }
+    { 
+        std::cerr << "constructing encoder" << std::endl;
+    }
+
+    void initialize() {
+        Component::initialize();
+
         set_encoder_settings();
 
         set_idle();
@@ -514,7 +545,9 @@ public:
         roi{0,0,100,100}, drc_mode(OMX_DynRangeExpOff), width(1920), height(1080),
         framerate(30), stride(width), compression_format(OMX_VIDEO_CodingUnused),
         color_format(OMX_COLOR_FormatYUV420PackedPlanar)
-    { }
+    { 
+        std::cerr << "constructing camera" << std::endl;
+    }
 
     void initialize() {
         Component::initialize();
@@ -578,6 +611,7 @@ public:
 protected:
 
     void load_camera_drivers() {
+        std::cerr << "loading camera drivers, handle: " << handle << std::endl;
         OMX_ERRORTYPE e;
 
         OMX_CONFIG_REQUESTCALLBACKTYPE cbs;
@@ -813,6 +847,7 @@ class App {
     Encoder enc;
 public:
     App() {
+        std::cerr << "constructing App" << std::endl;
         bcm_host_init();
 
         OMX_ERRORTYPE e = OMX_Init();
@@ -820,6 +855,9 @@ public:
             fprintf(stderr, "error: OMX_Init: %s\n", err2str(e));
             exit(1);
         }
+
+        cam.initialize();
+        enc.initialize();
 
         e = OMX_SetupTunnel(cam.handle, cam.video_port_index, enc.handle, enc.input_port_index);
         if (e != OMX_ErrorNone) {
@@ -831,15 +869,28 @@ public:
         cam.enable_port(cam.video_port_index);
         enc.enable_input();
         enc.enable_output();
+
+        cam.enable_capture();
+
+        while(true) {
+            std::cout << "waiting for fill buffer..." << std::endl;
+            enc.wait_for_fill_buffer_done();
+
+            printf("got buffer\n");
+        }
+
     }
 
     ~App() {
+        std::cerr << "destroying App" << std::endl;
         bcm_host_deinit();
     }
 };
 
 int main(int ac, char ** av) {
-    App app();
+    std::cerr << "starting." << std::endl;
+    App app;
+    std::cerr << "app constructed" << std::endl;
 
     return 0;
 }
