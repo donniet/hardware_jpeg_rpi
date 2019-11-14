@@ -187,6 +187,10 @@ public:
         EVENT_EMPTY_BUFFER_DONE = 0x2000,
     } component_event;
 
+    void wait_for_fill_buffer_done() {
+        wait(EVENT_FILL_BUFFER_DONE);
+    }
+
     Component(std::string const & name) {
         this->name = new char[sizeof(name_prefix) + name.size() + 1];
         sprintf(this->name, "%s%s", name_prefix, name.c_str());
@@ -838,9 +842,19 @@ public:
         cam.enable_port(cam.video_port_index);
         enc.enable_input();
         enc.enable_output();
+
+        cam.enable_capture();
+
+        while(true) {
+            enc.wait_for_fill_buffer_done();
+
+            printf("got buffer\n");
+        }
+
     }
 
     ~App() {
+        
         bcm_host_deinit();
     }
 };
