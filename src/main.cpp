@@ -194,9 +194,18 @@ public:
 
     Component(std::string const & name) {
         std::cerr << "constructing component: " << name << std::endl;
-        this->name = new char[sizeof(name_prefix) + name.size() + 1];
-        sprintf(this->name, "%s%s", name_prefix, name.c_str());
+        int len = strlen(name_prefix)+ name.size() + 1;
+        this->name = new char[len];
+        snprintf(this->name, len, "%s%s", name_prefix, name.c_str());
+    }
+    Component(const char * name) {
+        std::cerr << "constructing component: " << name << std::endl;
+        int len = strlen(name_prefix) + strlen(name) + 1;
+        this->name = new char[len];
+        snprintf(this->name, len, "%s%s", name_prefix, name);
+    }
 
+    void initialize() {
         OMX_ERRORTYPE e;
 
         if (vcos_event_flags_create(&flags, "component")) {
@@ -216,6 +225,8 @@ public:
             exit(1);
         }
 
+        std::cerr << "got component handle, disabling ports" << std::endl;
+
         static OMX_INDEXTYPE types[] = {
             OMX_IndexParamAudioInit, OMX_IndexParamVideoInit, OMX_IndexParamImageInit, OMX_IndexParamOtherInit
         };
@@ -224,15 +235,21 @@ public:
         OMX_GetParameter(handle, OMX_IndexParamVideoInit, &ports);
 
         for(auto type : types) {
-            if(OMX_GetParameter(handle, type, &ports) == OMX_ErrorNone) {
+            std::cerr << "looking at type: " << type << std::endl;
+
+            if((e = OMX_GetParameter(handle, type, &ports)) == OMX_ErrorNone) {
                 OMX_U32 nPortIndex;
                 for(nPortIndex = ports.nStartPortNumber; nPortIndex < ports.nStartPortNumber+ports.nPorts; nPortIndex++) {
+                    std::cerr << "disablign port: " << nPortIndex << std::endl;
                     e = OMX_SendCommand(handle, OMX_CommandPortDisable, nPortIndex, NULL);
                     if (e != OMX_ErrorNone) {
                         throw std::logic_error("failed to disable port");
                     }
+                    std::cerr << "waiting for port disable event..." << std::endl;
+                    wait(EVENT_PORT_DISABLE);
                 }
-                wait(EVENT_PORT_DISABLE);
+            } else {
+                std::cerr << "error: OMX_GetParameter: " << err2str(e) << std::endl;
             }
         }
     }
@@ -461,6 +478,11 @@ public:
         width(1920), height(1080), stride(width), framerate(30)
     { 
         std::cerr << "constructing encoder" << std::endl;
+    }
+
+    void initialize() {
+        Component::initialize();
+
         set_encoder_settings();
 
         set_idle();
@@ -528,6 +550,11 @@ public:
         color_format(OMX_COLOR_FormatYUV420PackedPlanar)
     { 
         std::cerr << "constructing camera" << std::endl;
+    }
+
+    void initialize() {
+        Component::initialize();
+
         load_camera_drivers();
 
         set_camera_settings();
@@ -587,6 +614,7 @@ public:
 protected:
 
     void load_camera_drivers() {
+        std::cerr << "loading camera drivers, handle: " << handle << std::endl;
         OMX_ERRORTYPE e;
 
         OMX_CONFIG_REQUESTCALLBACKTYPE cbs;
@@ -603,7 +631,7 @@ protected:
         OMX_PARAM_U32TYPE dev;
         OMX_INIT_STRUCTURE(dev);
         dev.nPortIndex = OMX_ALL;
-        dev.nU32 = 0;
+        dev.nU32 = 0; // camera id
         e = OMX_SetParameter(handle, OMX_IndexParamCameraDeviceNumber, &dev);
         if (e != OMX_ErrorNone) {
             fprintf(stderr, "error: OMX_SetParameter: %s\n", err2str(e));
@@ -839,6 +867,9 @@ public:
             exit(1);
         }
 
+        cam.initialize();
+        enc.initialize();
+
         e = OMX_SetupTunnel(cam.handle, cam.video_port_index, enc.handle, enc.input_port_index);
         if (e != OMX_ErrorNone) {
             fprintf(stderr, "error: OMX_Init: %s\n", err2str(e));
@@ -853,6 +884,7 @@ public:
         cam.enable_capture();
 
         while(true) {
+            std::cout << "waiting for fill buffer..." << std::endl;
             enc.wait_for_fill_buffer_done();
 
             printf("got buffer\n");
