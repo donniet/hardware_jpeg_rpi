@@ -364,8 +364,6 @@ public:
     }
 
     void disable_output() {
-        OMX_ERRORTYPE e;
-
         disable_port(input_port_index);
         disable_port(output_port_index);
 
@@ -612,7 +610,6 @@ protected:
 
     void load_camera_drivers() {
         std::cerr << "loading camera drivers, handle: " << handle << std::endl;
-        OMX_ERRORTYPE e;
 
         OMX_CONFIG_REQUESTCALLBACKTYPE cbs;
         OMX_INIT_STRUCTURE(cbs);

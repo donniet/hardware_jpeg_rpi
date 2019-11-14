@@ -3,7 +3,8 @@ ifeq ($(shell uname -m),x86_64)
 else
    CC = g++
 endif
-LDFLAGS = -L /opt/vc/lib -Wl,--whole-archive -L/opt/vc/lib/ \
+LDFLAGS = \
+   -L /opt/vc/lib -Wl,--whole-archive -L/opt/vc/lib/ \
    -lopenmaxil -lbcm_host -lvcos -lvchiq_arm -lpthread \
    -lrt -L/opt/vc/src/hello_pi/libs/ilclient -lilclient \
    -Wl,--no-whole-archive -rdynamic \
@@ -11,8 +12,10 @@ LDFLAGS = -L /opt/vc/lib -Wl,--whole-archive -L/opt/vc/lib/ \
 BLDDIR = $(shell pwd)
 INCDIR = $(BLDDIR)/inc
 SRCDIR = $(BLDDIR)/src
-OBJDIR = $(BLDDIR)/bin
-CFLAGS = -c -Wall -Wno-deprecated --std=c++11 -Wl,-Bstatic -I$(INCDIR) -g -DRASPBERRY_PI  \
+OBJDIR = $(BLDDIR)/bin/obj
+BINDIR = $(BLDDIR)/bin
+CFLAGS = \
+   -c -Wall -Wno-deprecated --std=c++11 -Wl,-Bstatic -I$(INCDIR) -g -DRASPBERRY_PI  \
    -DSTANDALONE -D__STDC_CONSTANT_MACROS \
    -D__STDC_LIMIT_MACROS -DTARGET_POSIX -D_LINUX -fPIC -DPIC \
    -D_REENTRANT -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64 \
@@ -23,17 +26,26 @@ CFLAGS = -c -Wall -Wno-deprecated --std=c++11 -Wl,-Bstatic -I$(INCDIR) -g -DRASP
    -I/opt/vc/include/interface/vmcs_host/linux/ \
    -I/opt/vc/src/hello_pi/libs/ilclient
 SRC = $(wildcard $(SRCDIR)/*.cpp)
+PSRC = $(wildcard $(BLDDIR)/*.cpp)
+
+PROGS = $(patsubst $(BLDDIR)/%.cpp, $(BINDIR)/%, $(PSRC))
 OBJ = $(patsubst $(SRCDIR)/%.cpp, $(OBJDIR)/%.o, $(SRC))
-EXE = $(OBJDIR)/main
+POBJ = $(patsubst $(BLDDIR)/%.cpp, $(BINDIR)/%.o, $(PSRC))
 
-all: clean $(EXE) 
-    
-$(EXE): $(OBJ) 
-	$(CC) $(LDFLAGS) $(OBJDIR)/*.o -o $@ 
+all: clean $(PROGS)
 
-$(OBJDIR)/%.o : $(SRCDIR)/%.cpp
+$(BINDIR)/%: $(OBJ) $(BINDIR)/%.o
+	echo "$(PROGS)"
+	mkdir -p $(@D)
+	$(CC) $(LDFLAGS) $(OBJ) $(patsubst $(BINDIR)/%, $(BINDIR)/%.o, $@) -o $@ 
+
+$(OBJDIR)/%.o: $(SRCDIR)/%.cpp
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) $< -o $@
+
+$(BINDIR)/%.o: $(BLDDIR)/%.cpp
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $< -o $@
 
 clean:
-	-rm -f $(OBJDIR)/*.o $(EXE)
+	-rm -f $(OBJDIR)/*.o $(BINDIR)/*.o $(PROGS)
