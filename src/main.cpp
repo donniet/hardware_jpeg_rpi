@@ -35,6 +35,18 @@ protected:
     OMX_STRING name;
     static const char * name_prefix;
 
+    void wrap_error(OMX_ERRORTYPE e, const char * prefix = nullptr) {
+        if (e != OMX_ErrorNone) {
+            if (prefix) {
+                fprintf(stderr, "error: %s: %s", prefix, err2str(e));
+            } else {
+                fprintf(stderr, "error: %s", err2str(e));
+            }
+            // exit for now
+            exit(1);
+        }
+    }
+
     void set_config(OMX_INDEXTYPE index, void * dat) {
         OMX_ERRORTYPE e = OMX_SetConfig(handle, index, dat);
         if (e != OMX_ErrorNone) {
@@ -298,6 +310,7 @@ public:
 protected:
     OMX_BUFFERHEADERTYPE* encoder_output_buffer;
 public:
+
     void enable_input() {
         enable_port(input_port_index);
     }
@@ -312,27 +325,15 @@ public:
         OMX_INIT_STRUCTURE(port);
         port.nPortIndex = output_port_index;
 
-        OMX_ERRORTYPE e = OMX_GetParameter(handle, OMX_IndexParamPortDefinition, &port);
-        if (e != OMX_ErrorNone) {
-            fprintf(stderr, "error: OMX_GetParameter: %s\n", err2str(e));
-            exit(1);
-        }
-
-        e = OMX_AllocateBuffer(handle, &encoder_output_buffer, output_port_index, 0, port.nBufferSize);
-        if (e != OMX_ErrorNone) {
-            fprintf(stderr, "error: OMX_AllocateBuffer: %s\n", err2str(e));
-            exit(1);
-        }
+        wrap_error(OMX_GetParameter(handle, OMX_IndexParamPortDefinition, &port));
+        wrap_error(OMX_AllocateBuffer(handle, &encoder_output_buffer, output_port_index, 0, port.nBufferSize));
         
         wait(EVENT_PORT_ENABLE);
     }
 
     OMX_BUFFERHEADERTYPE* fill_buffer() {
-        OMX_ERRORTYPE e = OMX_FillThisBuffer(handle, encoder_output_buffer);
-        if (e != OMX_ErrorNone) {
-            fprintf(stderr, "error: OMX_FillBuffer: %s\n", err2str(e));
-            exit(1);
-        }
+        wrap_error(OMX_FillThisBuffer(handle, encoder_output_buffer));
+
         wait(EVENT_FILL_BUFFER_DONE, 0);
         return encoder_output_buffer;
     }
@@ -343,11 +344,7 @@ public:
         disable_port(input_port_index);
         disable_port(output_port_index);
 
-        e = OMX_FreeBuffer(handle, output_port_index, encoder_output_buffer);
-        if (e != OMX_ErrorNone) {
-            fprintf(stderr, "error: OMX_FreeBuffer: %s\n", err2str(e));
-            exit(1);
-        }
+        wrap_error(OMX_FreeBuffer(handle, output_port_index, encoder_output_buffer));
 
         wait(EVENT_PORT_DISABLE);
     }
@@ -451,7 +448,7 @@ public:
         sei(OMX_FALSE), eede(OMX_FALSE), eede_loss_rate(0),
         profile(OMX_VIDEO_AVCProfileHigh), inline_headers(OMX_FALSE),
         width(1920), height(1080), stride(width), framerate(30)
-    { 
+    { }
         set_encoder_settings();
 
         set_idle();
@@ -517,7 +514,11 @@ public:
         roi{0,0,100,100}, drc_mode(OMX_DynRangeExpOff), width(1920), height(1080),
         framerate(30), stride(width), compression_format(OMX_VIDEO_CodingUnused),
         color_format(OMX_COLOR_FormatYUV420PackedPlanar)
-    { 
+    { }
+
+    void initialize() {
+        Component::initialize();
+
         load_camera_drivers();
 
         set_camera_settings();
@@ -584,21 +585,13 @@ protected:
         cbs.nPortIndex = OMX_ALL;
         cbs.nIndex = OMX_IndexParamCameraDeviceNumber;
         cbs.bEnable = OMX_TRUE;
-        e = OMX_SetConfig(handle, OMX_IndexConfigRequestCallback, &cbs);
-        if (e != OMX_ErrorNone) {
-            fprintf(stderr, "error: OMX_SetConfig: %s\n", err2str(e));
-            exit(1);
-        }
+        set_config(OMX_IndexConfigRequestCallback, &cbs);
 
         OMX_PARAM_U32TYPE dev;
         OMX_INIT_STRUCTURE(dev);
         dev.nPortIndex = OMX_ALL;
         dev.nU32 = 0;
-        e = OMX_SetParameter(handle, OMX_IndexParamCameraDeviceNumber, &dev);
-        if (e != OMX_ErrorNone) {
-            fprintf(stderr, "error: OMX_SetParameter: %s\n", err2str(e));
-            exit(1);
-        }
+        set_parameter(OMX_IndexParamCameraDeviceNumber, &dev);
 
         wait(EVENT_PARAM_OR_CONFIG_CHANGED);
     }
